@@ -20,3 +20,6 @@ jd.txt
 # Runtime artifacts
 server.log
 .server.pid
+
+# Claude Code local settings
+.claude/
