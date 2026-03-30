@@ -59,30 +59,19 @@ First time only — import the workflow into n8n:
 
 ## Send a job description
 
-### Via curl
+1. Paste the job description into `jd.txt`:
+   ```bash
+   nano jd.txt
+   ```
+2. Run:
+   ```bash
+   ./apply.sh
+   ```
 
-```bash
-curl -s -X POST http://localhost:5678/webhook/resume-tailor \
-  -H "Content-Type: application/json" \
-  -d '{
-    "jd": "Paste the full job description text here as a single JSON string."
-  }' | python3 -m json.tool
+Output:
 ```
-
-Response:
-```json
-{
-  "company": "CompanyName",
-  "drive_link": "https://drive.google.com/drive/folders/..."
-}
-```
-
-### Direct (no n8n)
-
-```bash
-python3 tailor.py --file path/to/jd.txt
-# or
-python3 tailor.py "Full JD text here"
+Company : CompanyName
+Drive   : https://drive.google.com/drive/folders/...
 ```
 
 ## Where files land in Google Drive
