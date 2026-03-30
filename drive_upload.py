@@ -42,7 +42,10 @@ from googleapiclient.http import MediaFileUpload
 
 OAUTH_CLIENT = Path("oauth_client.json")
 TOKEN_FILE   = Path("token.json")
-SCOPES       = ["https://www.googleapis.com/auth/drive.file"]
+SCOPES       = [
+    "https://www.googleapis.com/auth/drive.file",
+    "https://www.googleapis.com/auth/spreadsheets",
+]
 ROOT_FOLDER  = "Job Applications"
 DOCX_MIME    = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 FOLDER_MIME  = "application/vnd.google-apps.folder"

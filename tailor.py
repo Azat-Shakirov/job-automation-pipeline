@@ -29,6 +29,7 @@ import anthropic
 
 from build_docs import build_cover_letter, build_resume
 from drive_upload import upload_application
+from sheets_log import log_application
 
 MODEL            = "claude-sonnet-4-6"
 MASTER_RESUME    = Path("master_resume.json")
@@ -100,6 +101,8 @@ def parse_jd(client: anthropic.Anthropic, jd_text: str) -> dict:
                     distinctive — a specific product, mission detail, initiative, or challenge
                     mentioned in the posting that a motivated candidate would find compelling
                     (string)
+- "location":       city and state (or "Remote") where the job is based (string)
+- "work_type":      one of "On-site", "Remote", or "Hybrid" (string)
 
 Job description:
 \"\"\"
@@ -298,8 +301,12 @@ def run_pipeline(jd_text: str, verbose: bool = True) -> tuple[str, str]:
     )
 
     # ── Step 5: Upload to Google Drive ────────────────────────────────────────
-    print("[ 5/5 ] Uploading to Google Drive...")
+    print("[ 5/6 ] Uploading to Google Drive...")
     drive_link = upload_application(company_slug)
+
+    # ── Step 6: Log to job tracker sheet ──────────────────────────────────────
+    print("[ 6/6 ] Logging to job tracker...")
+    log_application(jd, drive_link)
 
     print(f"\nDone.")
     print(f"  Resume       → {resume_path}")
