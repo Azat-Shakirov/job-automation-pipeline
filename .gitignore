@@ -1,0 +1,22 @@
+input/gdrive_credentials.json
+input/master_resume.docx
+input/master_resume.json
+output/
+__pycache__/
+*.pyc
+.env
+venv/
+
+# Google auth secrets
+credentials.json
+oauth_client.json
+token.json
+
+# Personal data
+master_resume.json
+master-resume.docx
+jd.txt
+
+# Runtime artifacts
+server.log
+.server.pid
