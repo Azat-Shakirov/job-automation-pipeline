@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# start.sh — start the resume tailor server and n8n together.
+# start.sh — start the resume tailor server.
 # Usage: ./start.sh
 
 set -e
@@ -17,7 +17,7 @@ if [ -f "$DIR/.server.pid" ]; then
     rm -f "$DIR/.server.pid"
 fi
 
-# ── Start Flask server in background ─────────────────────────────────────────
+# ── Start Flask server ────────────────────────────────────────────────────────
 echo "Starting resume tailor server on http://localhost:5001..."
 cd "$DIR"
 python3 server.py >> "$LOG" 2>&1 &
@@ -38,7 +38,7 @@ if ! curl -s http://localhost:5001/health | grep -q "ok"; then
     exit 1
 fi
 
-# ── Trap: kill server when this script exits (Ctrl-C or n8n stops) ────────────
+# ── Trap: kill server on Ctrl-C ───────────────────────────────────────────────
 cleanup() {
     echo ""
     echo "Shutting down server (PID $SERVER_PID)..."
@@ -47,7 +47,6 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# ── Start n8n (foreground — blocks until Ctrl-C) ─────────────────────────────
-echo "Starting n8n..."
+echo "Press Ctrl-C to stop."
 echo ""
-n8n start
+wait "$SERVER_PID"

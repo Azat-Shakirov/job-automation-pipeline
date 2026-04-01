@@ -23,3 +23,6 @@ server.log
 
 # Claude Code local settings
 .claude/
+
+# Local-only features (not yet ready for public)
+sheets_log.py
