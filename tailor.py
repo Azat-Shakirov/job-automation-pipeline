@@ -29,6 +29,7 @@ import anthropic
 
 from build_docs import build_cover_letter, build_resume
 from drive_upload import upload_application
+from sheets_log import log_application
 
 MODEL            = "claude-sonnet-4-6"
 MASTER_RESUME    = Path("master_resume.json")
@@ -127,7 +128,42 @@ def tailor_resume(client: anthropic.Anthropic,
         "You are an expert resume writer specializing in ATS optimization. "
         "You rewrite resumes to match specific job descriptions. "
         "You never fabricate experience, metrics, or credentials. "
-        "Return only valid JSON — no prose, no markdown fences."
+        "Return only valid JSON — no prose, no markdown fences.\n\n"
+
+        "STRICT ONE-PAGE RULES:\n"
+        "- Summary: 2 sentences maximum. Lead with the role title (use the JD's exact title wording) "
+        "+ company name + 1-2 top keywords. Second sentence: top 2-3 tools/skills only. "
+        "No fluff, no 'I am excited', no repeating the job title.\n"
+        "- Skills: reorder categories so the most JD-relevant appear first. Remove any skill not "
+        "mentioned in the experience bullets or the JD. Never add skills the candidate hasn't "
+        "demonstrated. Keep each category to 5-6 items max.\n"
+        "- Experience bullets: keep ALL existing entries but trim each bullet to 1 line where "
+        "possible. Never add new bullets. Never expand existing bullets. Only lightly rephrase "
+        "1-2 words per bullet to insert a missing keyword — do not rewrite entire sentences.\n"
+        "- Never add new experience entries, new projects, or new skills that don't exist in "
+        "the master resume.\n"
+        "- The output JSON must produce a resume that fits on exactly 1 US Letter page with "
+        "0.75 inch side margins, 0.6 inch top margin, and 0.5 inch bottom margin when rendered "
+        "in Arial 11pt.\n\n"
+
+        "STRICT ATS RULES:\n"
+        "- Embed keywords naturally — never stuff. If a keyword already appears in a bullet, "
+        "do not repeat it in the same entry.\n"
+        "- Include both acronym AND full form only on first use in the skills section "
+        "(e.g. 'Security Orchestration Automation and Response (SOAR)'). In experience bullets, "
+        "use the short form only.\n"
+        "- Do not add Java, C++, Go, or any programming language the candidate has not used "
+        "in a real project.\n"
+        "- Do not list PowerShell, Node.js, or any tool as a skill unless it appears in at "
+        "least one experience bullet.\n"
+        "- Do not add vague filler skills: 'Software Engineering Concepts', 'SDLC', "
+        "'teamwork', 'communication'.\n"
+        "- Skills section: hard skills only, grouped by category. Certifications and Languages "
+        "are separate categories.\n"
+        "- Never fabricate metrics. If a bullet has a number (40%, 70%, 30-50 events), keep it "
+        "exactly as-is. Do not invent new numbers.\n"
+        "- Job title alignment: rephrase the summary role title to match the JD's exact title "
+        "wording, but never change actual job titles in the experience section."
     )
 
     user = f"""Tailor the resume below for this role and return the complete tailored resume as JSON.
@@ -137,23 +173,23 @@ KEY KEYWORDS: {', '.join(jd['keywords'])}
 REQUIRED QUALIFICATIONS: {'; '.join(jd['qualifications'])}
 
 TAILORING RULES:
-1. summary: Rewrite in exactly 2-3 sentences. Open with the role title and company name.
-   Weave in the top 5-7 keywords naturally. Keep metrics from the original where they fit.
-   No filler phrases like "passionate" or "dynamic".
+1. summary: Exactly 2 sentences. Sentence 1: role title (JD wording) + company name + 1-2 top keywords.
+   Sentence 2: top 2-3 tools/skills from the JD. No filler. No third sentence.
 
-2. skills: Reorder the categories so the most JD-relevant ones appear first.
-   Within each category, move JD-matching items to the front.
-   Drop any item that has zero relevance to this role.
-   Keep the same dict structure: {{"Category Name": ["item1", "item2", ...]}}.
+2. skills: Reorder categories so the most JD-relevant appear first. Within each category, move
+   JD-matching items to the front. Remove items with zero relevance or not backed by experience bullets.
+   Max 5-6 items per category. Same dict structure: {{"Category Name": ["item1", "item2", ...]}}.
 
-3. experience.bullets: For each entry, keep ALL bullets. You may lightly rephrase
-   1-2 bullets per entry to naturally surface missing keywords — only by reframing
-   what already happened, never by inventing numbers or outcomes.
-   Do not change dates, titles, company names, or metrics.
+3. experience.bullets: Keep every existing bullet. Trim to 1 line where possible.
+   Only rephrase 1-2 words per bullet to surface a missing keyword — no rewrites, no new bullets,
+   no expanded bullets. Do not change dates, titles, company names, or any existing metric.
 
 4. education: Return unchanged.
 
 5. contact + name: Return unchanged.
+
+ALLOWED SKILLS (exhaustive list from master resume — do not add any item outside this list):
+{json.dumps({cat: items for cat, items in master['skills'].items()}, indent=2)}
 
 MASTER RESUME JSON:
 {json.dumps(master, indent=2)}
@@ -300,8 +336,12 @@ def run_pipeline(jd_text: str, verbose: bool = True) -> tuple[str, str]:
     )
 
     # ── Step 5: Upload to Google Drive ────────────────────────────────────────
-    print("[ 5/5 ] Uploading to Google Drive...")
+    print("[ 5/6 ] Uploading to Google Drive...")
     drive_link = upload_application(company_slug)
+
+    # ── Step 6: Log to job tracker sheet ──────────────────────────────────────
+    print("[ 6/6 ] Logging to job tracker...")
+    log_application(jd, drive_link)
 
     print(f"\nDone.")
     print(f"  Resume       → {resume_path}")
