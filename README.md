@@ -5,8 +5,7 @@ Paste a job description → get a tailored resume + cover letter in your Google 
 ## How it works
 
 ```
-Job description (POST /resume-tailor)
-    → n8n webhook
+jd.txt (job description)
     → Flask server (localhost:5001)
     → Claude API: parse JD → tailor resume → generate cover letter
     → build ATS-clean .docx files
@@ -50,12 +49,7 @@ This generates `master_resume.json` which the pipeline uses as its source of tru
 ./start.sh
 ```
 
-This starts the Flask server on port 5001 and n8n together. One `Ctrl-C` stops both cleanly.
-
-First time only — import the workflow into n8n:
-1. Open http://localhost:5678
-2. Workflows → ⋯ → **Import from file** → select `workflow.json`
-3. Toggle the workflow **Active**
+This starts the Flask server on port 5001. Press `Ctrl-C` to stop.
 
 ## Send a job description
 
@@ -116,8 +110,7 @@ The parser expects the following document structure:
 | `drive_upload.py` | Upload output files to Google Drive via OAuth2 |
 | `tailor.py` | Full pipeline: Claude API tailoring + build + upload |
 | `server.py` | Flask wrapper exposing `POST /tailor` on port 5001 |
-| `workflow.json` | n8n workflow: webhook → server → respond |
-| `start.sh` | Start server + n8n together |
+| `start.sh` | Start the Flask server |
 | `requirements.txt` | Python dependencies |
 
 ## Excluded files (not committed to git)
