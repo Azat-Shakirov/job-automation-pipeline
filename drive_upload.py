@@ -2,17 +2,16 @@
 """
 drive_upload.py — upload resume + cover letter .docx to Google Drive.
 
-Uses OAuth2 so files are owned by YOUR Google account (sir4us2020@gmail.com)
-and count against your storage quota, not a service account's.
+Uses OAuth2 so files are owned by your Google account and count against your
+storage quota, not a service account's.
 
 One-time setup:
   1. GCP Console → APIs & Services → Credentials
-     https://console.cloud.google.com/apis/credentials?project=954058768147
-  2. Create Credentials → OAuth 2.0 Client ID → Desktop app → Create
-  3. Download JSON → save as  oauth_client.json  in this folder
-  4. OAuth consent screen → add sir4us2020@gmail.com as a Test User
-  5. Run:  python drive_upload.py <company>
-     Browser opens → sign in as sir4us2020@gmail.com → allow Drive access
+     Create Credentials → OAuth 2.0 Client ID → Desktop app → Create
+  2. Download JSON → save as  oauth_client.json  in this folder
+  3. OAuth consent screen → add your Google account as a Test User
+  4. Run:  python drive_upload.py <company>
+     Browser opens → sign in → allow Drive access
      token.json is saved; all future runs are fully automatic.
 
 Structure in your Drive:
@@ -42,7 +41,10 @@ from googleapiclient.http import MediaFileUpload
 
 OAUTH_CLIENT = Path("oauth_client.json")
 TOKEN_FILE   = Path("token.json")
-SCOPES       = ["https://www.googleapis.com/auth/drive.file"]
+SCOPES       = [
+    "https://www.googleapis.com/auth/drive.file",
+    "https://www.googleapis.com/auth/spreadsheets",
+]
 ROOT_FOLDER  = "Job Applications"
 DOCX_MIME    = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 FOLDER_MIME  = "application/vnd.google-apps.folder"
@@ -56,16 +58,19 @@ def _get_credentials() -> Credentials:
         sys.exit(
             "\nERROR: oauth_client.json not found.\n\n"
             "One-time setup:\n"
-            "  1. https://console.cloud.google.com/apis/credentials?project=954058768147\n"
+            "  1. GCP Console → APIs & Services → Credentials\n"
             "  2. Create Credentials → OAuth 2.0 Client ID → Desktop app → Create\n"
             "  3. Download JSON → save as oauth_client.json in this folder\n"
-            "  4. OAuth consent screen → add sir4us2020@gmail.com as a Test User\n"
+            "  4. OAuth consent screen → add your Google account as a Test User\n"
             "  5. Re-run this script.\n"
         )
 
     creds = None
     if TOKEN_FILE.exists():
         creds = Credentials.from_authorized_user_file(str(TOKEN_FILE), SCOPES)
+        # Force re-auth if token is missing any required scope
+        if creds and creds.scopes and not set(SCOPES).issubset(creds.scopes):
+            creds = None
 
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:

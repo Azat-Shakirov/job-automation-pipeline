@@ -29,7 +29,12 @@ import anthropic
 
 from build_docs import build_cover_letter, build_resume
 from drive_upload import upload_application
-from sheets_log import log_application
+
+try:
+    from sheets_log import log_application
+except ImportError:
+    def log_application(*args, **kwargs):  # noqa: E302
+        pass  # sheets_log.py is local-only and not required
 
 MODEL            = "claude-sonnet-4-6"
 MASTER_RESUME    = Path("master_resume.json")
@@ -125,78 +130,22 @@ def tailor_resume(client: anthropic.Anthropic,
     Returns a complete tailored resume dict in the same schema as master_resume.json.
     """
     system = (
-        "You are an expert resume writer specializing in ATS optimization. "
-        "You rewrite resumes to match specific job descriptions. "
-        "You never fabricate experience, metrics, or credentials. "
-        "Return only valid JSON — no prose, no markdown fences.\n\n"
-
-        "STRICT ONE-PAGE RULES:\n"
-        "- Summary: 2 sentences maximum. Lead with the role title (use the JD's exact title wording) "
-        "+ company name + 1-2 top keywords. Second sentence: top 2-3 tools/skills only. "
-        "No fluff, no 'I am excited', no repeating the job title.\n"
-        "- Skills: reorder categories so the most JD-relevant appear first. Remove any skill not "
-        "mentioned in the experience bullets or the JD. Never add skills the candidate hasn't "
-        "demonstrated. Keep each category to 5-6 items max.\n"
-        "- Experience bullets: keep ALL existing entries but trim each bullet to 1 line where "
-        "possible. Never add new bullets. Never expand existing bullets. Only lightly rephrase "
-        "1-2 words per bullet to insert a missing keyword — do not rewrite entire sentences.\n"
-        "- Never add new experience entries, new projects, or new skills that don't exist in "
-        "the master resume.\n"
-        "- The output JSON must produce a resume that fits on exactly 1 US Letter page with "
-        "0.75 inch side margins, 0.6 inch top margin, and 0.5 inch bottom margin when rendered "
-        "in Arial 11pt.\n\n"
-
-        "STRICT ATS RULES:\n"
-        "- Embed keywords naturally — never stuff. If a keyword already appears in a bullet, "
-        "do not repeat it in the same entry.\n"
-        "- Include both acronym AND full form only on first use in the skills section "
-        "(e.g. 'Security Orchestration Automation and Response (SOAR)'). In experience bullets, "
-        "use the short form only.\n"
-        "- Do not add Java, C++, Go, or any programming language the candidate has not used "
-        "in a real project.\n"
-        "- Do not list PowerShell, Node.js, or any tool as a skill unless it appears in at "
-        "least one experience bullet.\n"
-        "- Do not add vague filler skills: 'Software Engineering Concepts', 'SDLC', "
-        "'teamwork', 'communication'.\n"
-        "- Skills section: hard skills only, grouped by category. Certifications and Languages "
-        "are separate categories.\n"
-        "- Never fabricate metrics. If a bullet has a number (40%, 70%, 30-50 events), keep it "
-        "exactly as-is. Do not invent new numbers.\n"
-        "- Job title alignment: rephrase the summary role title to match the JD's exact title "
-        "wording, but never change actual job titles in the experience section."
+        "You are a resume organizer. You receive a master resume JSON and a job description.\n"
+        "Your ONLY job is to reorder the skills categories so the most relevant to the JD appear first.\n"
+        "Do NOT change any text, bullets, summary, job titles, dates, or metrics.\n"
+        "Do NOT add or remove any skills.\n"
+        "Do NOT rewrite anything.\n"
+        "Return the master resume JSON with skills categories reordered only. "
+        "Everything else must be byte-for-byte identical to the input."
     )
 
-    user = f"""Tailor the resume below for this role and return the complete tailored resume as JSON.
-
-TARGET ROLE: {jd['role']} at {jd['company']}
-KEY KEYWORDS: {', '.join(jd['keywords'])}
-REQUIRED QUALIFICATIONS: {'; '.join(jd['qualifications'])}
-
-TAILORING RULES:
-1. summary: Exactly 2 sentences. Sentence 1: role title (JD wording) + company name + 1-2 top keywords.
-   Sentence 2: top 2-3 tools/skills from the JD. No filler. No third sentence.
-
-2. skills: Reorder categories so the most JD-relevant appear first. Within each category, move
-   JD-matching items to the front. Remove items with zero relevance or not backed by experience bullets.
-   Max 5-6 items per category. Same dict structure: {{"Category Name": ["item1", "item2", ...]}}.
-
-3. experience.bullets: Keep every existing bullet. Trim to 1 line where possible.
-   Only rephrase 1-2 words per bullet to surface a missing keyword — no rewrites, no new bullets,
-   no expanded bullets. Do not change dates, titles, company names, or any existing metric.
-
-4. education: Return unchanged.
-
-5. contact + name: Return unchanged.
-
-ALLOWED SKILLS (exhaustive list from master resume — do not add any item outside this list):
-{json.dumps({cat: items for cat, items in master['skills'].items()}, indent=2)}
-
-MASTER RESUME JSON:
+    user = f"""Master resume JSON:
 {json.dumps(master, indent=2)}
 
-Return the complete tailored resume as a single JSON object with keys:
-name, contact, summary, skills, experience, education
-"""
+Job description:
+{jd.get('_raw_jd', '')}
+
+Return only the reordered JSON. No explanation, no markdown."""
 
     raw = _ask(client, system, user, max_tokens=4096)
     return _parse_json(raw)
@@ -213,45 +162,39 @@ def generate_cover_letter(client: anthropic.Anthropic,
     """
     system = """You are a senior recruitment director at Robert Half who reads 500+ cover letters per week and instantly knows the difference between a forgettable template and one that makes you pick up the phone to schedule an interview.
 
-Write a cover letter that makes the hiring manager stop scrolling and start scheduling. Follow these rules exactly:
+Write a cover letter that makes the hiring manager stop scrolling and start scheduling. Follow this structure exactly:
 
 - Opening hook: a specific first sentence connecting the candidate's experience to the company's current challenge. NEVER start with "I am writing to apply for"
-
-- Company research proof: reference a specific product, initiative, or mission detail from the job description proving research was done
-
-- Value match paragraph: the 3 specific capabilities the candidate brings that directly solve what the job posting is really asking for
-
+- Company research proof: reference a specific product, initiative, mission, or strategic direction from the job description that shows genuine research
+- Value match paragraph: the 3 specific capabilities the candidate brings that directly solve what the JD is really asking for — use the 3 most relevant achievements provided
 - Spotlight achievement: one quantified accomplishment proving the candidate has already done this job's most important task
-
 - Cultural fit signal: connect the candidate's work style to the company's mission without sounding rehearsed
-
-- Specific contribution: name one concrete initiative the candidate would work on in the first 90 days based on the role
-
+- Specific contribution: one concrete initiative the candidate would work on in the first 90 days based on the role
 - Confident closing: end with a clear next step that assumes the interview will happen
-
 - Length: 250-300 words maximum
+- Tone: confident, direct, human — genuine excitement without pleading
 
-- Tone: confident, direct, human — genuine excitement without pleading or over-flattering"""
+Output format rules (strictly enforced):
+- Start IMMEDIATELY with the opening hook paragraph — no header block, no sender name/email, no "---" separator lines, no recipient/addressee block, no "Dear [Name]" salutation
+- End with ONLY the body paragraphs; do NOT include "Sincerely,", the candidate's name, or initials — the document builder appends the closing automatically
+- Plain paragraphs separated by blank lines only"""
 
     top_3 = _score_bullets(tailored["experience"], jd["keywords"], n=3)
     contact = tailored.get("contact", {})
+    phone_or_github = contact.get("phone", contact.get("github", ""))
 
     user = f"""Job description:
 {jd.get('_raw_jd', '')}
 
-Candidate's 3 most relevant achievements:
+Candidate's 3 most relevant achievements (selected by matching JD keywords against experience bullets):
 {top_3}
 
-One thing that genuinely excites the candidate about this company:
+Something genuine about this company that connects to the candidate's background (research the JD for what makes this company/role distinctive — mission, product, challenge, or initiative that a candidate with this resume would authentically care about):
 {jd.get('why_exciting', '')}
 
-Write the cover letter for: {tailored['name']}, {contact.get('email', '')}, {contact.get('phone', '')}
+Candidate details: {tailored['name']}, {contact.get('email', '')}, {phone_or_github}
 
-Return ONLY the letter body as plain text — no subject line, no address block, no markdown.
-Paragraphs separated by blank lines. End with exactly:
-
-Sincerely,
-Azat Shakirov"""
+Write the cover letter. No placeholders, no markers — ready to send."""
 
     return _ask(client, system, user, max_tokens=1200)
 
@@ -326,13 +269,17 @@ def run_pipeline(jd_text: str, verbose: bool = True) -> tuple[str, str]:
     tailored_json_path = OUT_DIR / f"tailored_{company_slug}.json"
     tailored_json_path.write_text(json.dumps(tailored, indent=2))
 
+    # Save raw JD text for later reference
+    jd_txt_path = OUT_DIR / f"jd_{company_slug}.txt"
+    jd_txt_path.write_text(jd_text)
+
     resume_path = build_resume(tailored, company_slug)
     cl_path     = build_cover_letter(
         cover_text, company_slug,
-        name     = tailored.get("name", master.get("name", "")),
-        email    = contact.get("email", ""),
-        phone    = contact.get("phone", ""),
-        location = contact.get("location", ""),
+        name         = tailored.get("name", master.get("name", "")),
+        email        = contact.get("email", ""),
+        linkedin     = contact.get("linkedin", ""),
+        job_location = jd.get("location", ""),
     )
 
     # ── Step 5: Upload to Google Drive ────────────────────────────────────────
@@ -347,6 +294,7 @@ def run_pipeline(jd_text: str, verbose: bool = True) -> tuple[str, str]:
     print(f"  Resume       → {resume_path}")
     print(f"  Cover letter → {cl_path}")
     print(f"  Tailored JSON→ {tailored_json_path}")
+    print(f"  JD text      → {jd_txt_path}")
     print(f"  Drive folder → {drive_link}")
     # Emit structured result for n8n / programmatic callers
     print(f"\nPIPELINE_RESULT: {json.dumps({'company': company_slug, 'drive_link': drive_link})}")
